@@ -20,7 +20,8 @@ import org.springframework.test.context.junit.jupiter.SpringExtension;
 
 import java.util.Map;
 
-import static com.postagram.controller.UserControllerTest.createValidUser;
+
+import static com.postagram.TestUtil.createValidUser;
 import static org.assertj.core.api.Assertions.assertThat;
 
 

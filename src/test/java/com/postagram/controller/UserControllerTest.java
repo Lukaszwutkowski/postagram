@@ -1,26 +1,32 @@
 package com.postagram.controller;
 
+import com.postagram.TestPage;
+import com.postagram.TestUtil;
 import com.postagram.dao.UserRepository;
 import com.postagram.domain.GenericResponse;
 import com.postagram.domain.User;
 import com.postagram.error.ApiError;
+import com.postagram.service.UserService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
+import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.client.support.BasicAuthenticationInterceptor;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
-
 
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import static com.postagram.TestUtil.createValidUser;
 import static org.assertj.core.api.Assertions.assertThat;
 
 @ExtendWith(SpringExtension.class)
@@ -34,6 +40,9 @@ public class UserControllerTest {
 
     @Autowired
     UserRepository userRepository;
+
+    @Autowired
+    UserService userService;
 
     @BeforeEach
     public void cleanup(){
@@ -160,9 +169,7 @@ public class UserControllerTest {
         ResponseEntity<Object> response = postSignup(user, Object.class);
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
     }
-    public <T> ResponseEntity<T> postSignup(Object request, Class<T> response){
-        return testRestTemplate.postForEntity(API_1_0_USERS, request, response);
-    }
+
     @Test
     public void postUser_whenAnotherUserHasSameUsername_receiveMessageOfDuplicateUsername() {
         userRepository.save(createValidUser());
@@ -173,13 +180,62 @@ public class UserControllerTest {
         assertThat(validationErrors.get("username")).isEqualTo("This name is in use");
     }
 
-    public static User createValidUser() {
-        User user = new User();
-        user.setUsername("test-user");
-        user.setDisplayName("test-display");
-        user.setPassword("P4ssword");
-        user.setImage("profile.png");
-        return user;
+    @Test
+    public void getUsers_whenThereIsAUserInDB_receivePageWithUser() {
+        userRepository.save(TestUtil.createValidUser());
+        ResponseEntity<TestPage<Object>> response = getUsers(new ParameterizedTypeReference<TestPage<Object>>() {});
+        assertThat(response.getBody().getNumberOfElements()).isEqualTo(1);
+    }
+
+    @Test
+    public void getUsers_whenPageSizeNotProvided_receivePageSizeAs10() {
+        ResponseEntity<TestPage<Object>> response = getUsers(new ParameterizedTypeReference<TestPage<Object>>() {});
+        assertThat(response.getBody().getSize()).isEqualTo(10);
+    }
+
+    @Test
+    public void getUsers_whenPageSizeIsGreaterThan100_receivePageSizeAs100() {
+        String path = API_1_0_USERS + "?size=500";
+        ResponseEntity<TestPage<Object>> response = getUsers(path, new ParameterizedTypeReference<TestPage<Object>>() {});
+        assertThat(response.getBody().getSize()).isEqualTo(100);
+    }
+    @Test
+    public void getUserByUsername_whenUserExist_receiveOk() {
+        String username = "test-user";
+        userService.save(createValidUser(username));
+        ResponseEntity<Object> response = getUser(username, Object.class);
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+    }
+
+    @Test
+    public void getUsers_whenUserLoggedIn_receivePageWithouLoggedInUser() {
+        userService.save(TestUtil.createValidUser("user1"));
+        userService.save(TestUtil.createValidUser("user2"));
+        userService.save(TestUtil.createValidUser("user3"));
+        authenticate("user1");
+        ResponseEntity<TestPage<Object>> response = getUsers(new ParameterizedTypeReference<TestPage<Object>>() {});
+        assertThat(response.getBody().getTotalElements()).isEqualTo(2);
+    }
+
+    private void authenticate(String username) {
+        testRestTemplate.getRestTemplate()
+                .getInterceptors().add(new BasicAuthenticationInterceptor(username, "P4ssword"));
+    }
+
+    public <T> ResponseEntity<T> postSignup(Object request, Class<T> response){
+        return testRestTemplate.postForEntity(API_1_0_USERS, request, response);
+    }
+
+    public <T> ResponseEntity<T> getUsers(ParameterizedTypeReference<T> responseType){
+        return testRestTemplate.exchange(API_1_0_USERS, HttpMethod.GET, null, responseType);
+    }
+
+    public <T> ResponseEntity<T> getUsers(String path, ParameterizedTypeReference<T> responseType){
+        return testRestTemplate.exchange(path, HttpMethod.GET, null, responseType);
+    }
+    public <T> ResponseEntity<T> getUser(String username, Class<T> responseType){
+        String path = API_1_0_USERS + "/" + username;
+        return testRestTemplate.getForEntity(path, responseType);
     }
 
 }

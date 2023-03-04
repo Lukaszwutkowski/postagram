@@ -2,6 +2,7 @@ package com.postagram.controller;
 
 import com.postagram.domain.CurrentUser;
 import com.postagram.domain.User;
+import com.postagram.domain.vm.UserVM;
 import com.postagram.error.ApiError;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
@@ -20,15 +21,7 @@ import java.util.Map;
 public class LoginController {
 
     @PostMapping("/api/1.0/login")
-    User handleLogin(@CurrentUser User loggedInUser){
-        return loggedInUser;
+    UserVM handleLogin(@CurrentUser User loggedInUser){
+        return new UserVM(loggedInUser);
     }
-
-    @ExceptionHandler({AccessDeniedException.class})
-    @ResponseStatus(HttpStatus.UNAUTHORIZED)
-    ApiError handleAccessDeniedException() {
-        return new ApiError(401, "Access error", "/api/1.0/login");
-    }
-
-
 }
